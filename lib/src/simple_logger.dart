@@ -1,8 +1,10 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:logging/logging.dart' show Level;
 import 'package:stack_trace/stack_trace.dart' show Frame, Trace;
-
+import 'package:synchronized/synchronized.dart';
+import 'dart:isolate';
 import 'log_info.dart';
 
 typedef Formatter = String Function(LogInfo info);
@@ -18,7 +20,10 @@ enum LoggerMode {
   log,
 
   /// Use [print] function.
-  print
+  print,
+
+  /// Write to file
+  file
 }
 
 /// Get singleton logger by `SimpleLogger()`
@@ -38,6 +43,8 @@ class SimpleLogger {
   Level get level => _level;
   Level get stackTraceLevel => _stackTraceLevel;
   LoggerMode mode = LoggerMode.print;
+  String _logFilePath = '';
+  late File _logfile;
 
   /// Includes caller info only when includeCallerInfo is true.
   /// See also `void setLevel(Level level, {bool includeCallerInfo})`
@@ -49,6 +56,12 @@ class SimpleLogger {
   int get callerInfoFrameLevelOffset => _callerInfoFrameLevelOffset;
 
   bool isLoggable(Level value) => value >= level;
+
+  void setFileMode(String filepath) {
+    _logFilePath = filepath;
+    mode = LoggerMode.file;
+    _logfile = File(_logFilePath);
+  }
 
   /// If includeCallerInfo is true, caller info will be included for
   /// any message of this level or above automatically.
@@ -115,6 +128,8 @@ class SimpleLogger {
         return '';
       case LoggerMode.print:
         return '${levelPrefixes[level] ?? ''}$level ';
+      case LoggerMode.file:
+        return '${levelPrefixes[level] ?? ''}$level ';
     }
   }
 
@@ -123,6 +138,8 @@ class SimpleLogger {
       case LoggerMode.log:
         return '';
       case LoggerMode.print:
+        return '$time ';
+      case LoggerMode.file:
         return '$time ';
     }
   }
@@ -195,9 +212,26 @@ class SimpleLogger {
       case LoggerMode.print:
         // ignore: avoid_print
         print(log);
+        break;
+      case LoggerMode.file:
+        // ignore: avoid_print
+        print(log);
+        writeToFile(log);
+        break;
     }
     onLogged(log, info);
     return log;
+  }
+
+  Future<void> writeToFile(String log) async {
+    final lock = Lock();
+    await lock.synchronized(() async {
+      _logfile.writeAsStringSync(
+        '$log\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    });
   }
 
   Frame? _getCallerFrame() {
