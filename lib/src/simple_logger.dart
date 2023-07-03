@@ -61,6 +61,9 @@ class SimpleLogger {
     _logFilePath = filepath;
     mode = LoggerMode.file;
     _logfile = File(_logFilePath);
+    if (!_logfile.existsSync()) {
+      _logfile.createSync(recursive: true);
+    }
   }
 
   /// If includeCallerInfo is true, caller info will be included for
